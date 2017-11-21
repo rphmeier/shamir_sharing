@@ -84,8 +84,8 @@ fn extract_secret(points: &[Point]) -> Value {
 }
 
 fn main() {
-    let n = 5;
-    let k = 8;
+    let n = 100;
+    let k = 150;
     let secret = Value::from(0xabcdefdeadbeefu64);
 
     let points = secret_sharing(secret.clone(), n, k);

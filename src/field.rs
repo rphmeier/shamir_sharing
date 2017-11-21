@@ -31,8 +31,12 @@ pub struct Value(BigInt);
 
 impl Value {
     fn mod_inverse(&self) -> Self {
+        // uses the extended euclidean method. alternative could be to exploit the fact that
+        // a^(p - 1) == 1 == a*a^(p - 2).
+        //
+        // that does at most ~220 multiplications and modulus operations, so it may be faster.
         PRIME.with(|prime| {
-            assert!(!self.is_zero(), "Attempted division by zero");
+            assert!(!self.is_zero(), "Attempted to take inverse of zero");
 
             let zero_val = BigInt::zero();
             let (mut t, mut new_t) = (zero_val.clone(), BigInt::one());
@@ -42,16 +46,16 @@ impl Value {
                 let quotient = &r / &new_r;
 
                 let temp_t = new_t.clone();
-                new_t = t - quotient.clone() * new_t;
+                new_t = &t - &quotient * &new_t;
                 t = temp_t;
 
                 let temp_r = new_r.clone();
-                new_r = r - quotient * new_r; 
+                new_r = &r - &quotient * &new_r; 
                 r = temp_r;
             }
 
             if r > BigInt::one() { panic!("unable to invert {}", self.0) }
-            if t < BigInt::zero() { t = t + prime }
+            if t < zero_val { t = t + prime }
 
             Value(t)
         })
