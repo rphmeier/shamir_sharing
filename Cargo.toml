@@ -1,0 +1,9 @@
+[package]
+name = "shamir-sharing"
+version = "0.1.0"
+authors = ["Robert Habermeier <rphmeier@gmail.com>"]
+
+[dependencies]
+num = "0.1"
+clap = "2.26.0"
+rand = "0.3"
