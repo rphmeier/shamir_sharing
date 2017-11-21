@@ -4,6 +4,9 @@ use std::ops::{Add, Mul, Sub, Div};
 use num::{One, Zero};
 use num::bigint::{BigInt, Sign};
 
+/// This module exports two items: a large prime number `PRIME` and the `Value` type, which are members of
+/// the finite field Z / PRIME*Z
+
 // we just do secret sharing over this big prime (same order as secp256k1 curve).
 // 2^256 - 2^32 - 2^9 - 2^8 - 2^7 - 2^6 - 2^4 - 1
 thread_local! {
@@ -27,7 +30,7 @@ thread_local! {
 pub struct Value(BigInt);
 
 impl Value {
-    pub fn mod_inverse(&self) -> Self {
+    fn mod_inverse(&self) -> Self {
         PRIME.with(|prime| {
             assert!(!self.is_zero(), "Attempted division by zero");
 
