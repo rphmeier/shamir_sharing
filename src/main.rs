@@ -149,6 +149,7 @@ fn cli() -> Result<(), String> {
             .map_err(|e| format!("Error reading from stdin: {}", e))?;
 
         let points = buffer.lines()
+            .filter(|line| !line.trim().is_empty())
             .map(|line| ::serde_json::from_str::<JsonPoint>(&line))
             .map(|res| res.map_err(|e| format!("Malformatted JSON: {}", e)))
             .map(|res| res.and_then(|jp| jp.to_point().map_err(|e| format!("Malformatted point: {:?}", e))))
