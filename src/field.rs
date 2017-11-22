@@ -25,11 +25,36 @@ thread_local! {
     };
 }
 
+/// Error when parsing from bytes
+#[derive(Debug)]
+pub enum ParseBytesError {
+    TooBig,
+    BadEncoding,
+}
+
 // Integer on the prime field.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Value(BigInt);
 
 impl Value {
+    // parse bytes with the given radix
+    pub fn parse_bytes(bytes: &[u8], radix: u32) -> Result<Self, ParseBytesError> {
+        BigInt::parse_bytes(bytes, radix)
+            .ok_or(ParseBytesError::BadEncoding)
+            .and_then(|x| PRIME.with(|prime| {
+                if &x < prime {
+                    Ok(Value(x))
+                } else {
+                    Err(ParseBytesError::TooBig)
+                }
+            }))
+    }
+
+    // turn the data into a hex string
+    pub fn to_hex_string(&self) -> String {
+        self.0.to_str_radix(16)
+    }
+
     fn mod_inverse(&self) -> Self {
         // uses the extended euclidean method. alternative could be to exploit the fact that
         // a^(p - 1) == 1 == a*a^(p - 2).

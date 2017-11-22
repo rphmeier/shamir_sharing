@@ -1,0 +1,25 @@
+name: shamir-sharing
+version: "0.1"
+author: Robert Habermeier <rphmeier@gmail.com>
+about: Creates shamir sharings for short secrets.
+subcommands:
+    - create:
+        about: create a secret sharing
+        args:
+            - secret:
+                short: s
+                required: true
+                help: "secret to share, up to 32 bytes hex-encoded"
+                takes_value: true
+            - threshold:
+                short: t
+                required: true
+                help: "number of points necessary to reconstruct secret"
+                takes_value: true                
+            - number:
+                short: n
+                required: true
+                help: "number of points to generate"
+                takes_value: true                
+    - restore:
+        about: reconstruct secret from points

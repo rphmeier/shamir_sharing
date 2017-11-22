@@ -1,17 +1,51 @@
 extern crate num;
-extern crate clap;
 extern crate rand;
+extern crate serde;
+extern crate serde_json;
 
+#[macro_use]
+extern crate clap;
+
+#[macro_use]
+extern crate serde_derive;
+
+use clap::App;
 use num::{Zero, One};
 use rand::{Rng, OsRng};
 
+
 mod field;
+
 use field::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Point {
     x: Value,
     y: Value,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct JsonPoint {
+    x: String,
+    y: String,
+}
+
+impl<'a> From<&'a Point> for JsonPoint {
+    fn from(p: &'a Point) -> Self {
+        JsonPoint {
+            x: p.x.to_hex_string(),
+            y: p.y.to_hex_string(),            
+        }
+    }
+}
+
+impl JsonPoint {
+    fn to_point(&self) -> Result<Point, ::field::ParseBytesError> {
+        Ok(Point {
+            x: Value::parse_bytes(self.x.as_bytes(), 16)?,
+            y: Value::parse_bytes(self.y.as_bytes(), 16)?,            
+        })
+    }
 }
 
 // make a list of non-zero inputs
@@ -25,16 +59,16 @@ fn make_nonzero_inputs(rng: &mut OsRng, len: usize) -> Vec<Value> {
 }
 
 // Create a set of points for secret sharing.
-// n: number of points necessary to recreate secret.
-// k: number of points to create.
-fn secret_sharing(secret: Value, n: usize, k: usize) -> Vec<Point> {
-    assert!(n <= k);
-    assert!(n > 1);
+// t: number of points necessary to recreate secret.
+// n: number of points to create.
+fn secret_sharing(secret: Value, t: usize, n: usize) -> Vec<Point> {
+    assert!(t <= n);
+    assert!(t > 1);
 
     let mut rng = OsRng::new().expect("Failed to acquire secure randomness");
 
     // make sure we have a degree-n polynomial with all non-zero coefficients.
-    let coefficients = make_nonzero_inputs(&mut rng, n - 1);
+    let coefficients = make_nonzero_inputs(&mut rng, t - 1);
 
     let apply_polynomial = |x: Value| {
         let mut out = secret.clone();
@@ -55,7 +89,7 @@ fn secret_sharing(secret: Value, n: usize, k: usize) -> Vec<Point> {
         "secret not embedded in the polynomial correctly");
 
     // apply the function to k different non-zero inputs
-    make_nonzero_inputs(&mut rng, k).into_iter().map(apply_polynomial).collect()
+    make_nonzero_inputs(&mut rng, n).into_iter().map(apply_polynomial).collect()
 }
 
 // evaluates the j'th langrange basis polynomial at 0.
@@ -83,26 +117,55 @@ fn extract_secret(points: &[Point]) -> Value {
     accum
 }
 
-fn main() {
-    let n = 100;
-    let k = 150;
-    let secret = Value::from(0xabcdefdeadbeefu64);
+fn cli() -> Result<(), String> {
+    let yaml = load_yaml!("cli.yml");
+    let matches = App::from_yaml(yaml).get_matches();
 
-    let points = secret_sharing(secret.clone(), n, k);
+    if let Some(matches) = matches.subcommand_matches("create") {
+        let secret = matches.value_of("secret").expect("required");
+        let n = matches.value_of("number").expect("required");
+        let t = matches.value_of("threshold").expect("required");
 
-    println!("Secret = {}", secret);
 
-    for point in &points {
-        println!(
-            "{{ x: {}, y: {} }}", 
-            point.x,
-            point.y,
-        );
+        let secret = Value::parse_bytes(secret.as_bytes(), 16)
+            .map_err(|e| format!("{:?}", e))?;
+        let n: usize = n.parse().map_err(|e| format!("{}", e))?;
+        let t: usize = t.parse().map_err(|e| format!("{}", e))?;
+
+        for point in secret_sharing(secret, t, n) {
+            let json_point = JsonPoint::from(&point);
+            let json = ::serde_json::to_string(&json_point)
+                .expect("serialization will not fail.");
+
+            println!("{}", json);
+        }
     }
 
-    for point_group in points.windows(n) {
-        let extracted = extract_secret(point_group);
+    if let Some(_) = matches.subcommand_matches("restore") {
+        use std::io::{self, Read};
 
-        println!("Extracted = {}", extracted);
+        let mut buffer = String::new();
+        io::stdin().read_to_string(&mut buffer)
+            .map_err(|e| format!("Error reading from stdin: {}", e))?;
+
+        let points = buffer.lines()
+            .map(|line| ::serde_json::from_str::<JsonPoint>(&line))
+            .map(|res| res.map_err(|e| format!("Malformatted JSON: {}", e)))
+            .map(|res| res.and_then(|jp| jp.to_point().map_err(|e| format!("Malformatted point: {:?}", e))))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let secret = extract_secret(&points);
+
+        println!("{}", secret.to_hex_string());
+    }
+
+    Ok(())
+}
+
+fn main() {
+    use std::io::Write;
+
+    if let Err(e) = cli() {
+        let _ = write!(::std::io::stderr(), "{}", e);
     }
 }
